@@ -504,8 +504,15 @@ class JsonTreeViewer:
 
     def _show_diff(self, idx1, idx2):
         """打开侧边对比标签页"""
-        raw1 = self.tabs[idx1].get_formatted_text()
-        raw2 = self.tabs[idx2].get_formatted_text()
+        tab1 = self.tabs[idx1]
+        tab2 = self.tabs[idx2]
+        # 从 parsed_data 生成格式化 JSON（确保有内容，不依赖 output_box）
+        def _get_formatted(tab):
+            if tab.parsed_data is not None:
+                return json.dumps(tab.parsed_data, indent=2, ensure_ascii=False)
+            return tab.get_formatted_text()
+        raw1 = _get_formatted(tab1)
+        raw2 = _get_formatted(tab2)
         if not raw1 and not raw2:
             return
         name1 = self.notebook.tab(idx1, "text")
