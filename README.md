@@ -24,7 +24,7 @@
 ## 快速开始
 
 ```bash
-python json_tree_viewer.py
+python mh_json.py
 ```
 
 1. 复制你的 JSON 数据
@@ -34,6 +34,7 @@ python json_tree_viewer.py
 
 ## 截图
 
+![1](..\mh-json\1.png)
 
 ## 依赖
 
