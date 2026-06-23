@@ -171,66 +171,88 @@ class JsonTreeViewer:
         ttk.Button(toolbar, text="复制美化 JSON", command=self.copy_formatted).pack(side="left", padx=(12, 0))
         ttk.Button(toolbar, text="从剪贴板粘贴", command=self.paste_clipboard).pack(side="left", padx=(4, 0))
 
-        # ====== 主区域: 左右分栏 ======
+        # ====== 主区域: 左右分栏（可拖拽） ======
         main_pane = ttk.PanedWindow(root, orient="horizontal")
         main_pane.pack(fill="both", expand=True, padx=8, pady=(0, 8))
 
-        # ---- 左栏: 输入 + 树状图 ----
-        left_frame = ttk.Frame(main_pane)
-        main_pane.add(left_frame, weight=1)
+        # ========== 左栏: 输入 + 树状图 + 详情（纵向可拖拽） ==========
+        left_pane = ttk.PanedWindow(main_pane, orient="vertical")
+        main_pane.add(left_pane, weight=1)
 
-        ttk.Label(left_frame, text="输入（粘贴 JSON）:", anchor="w").pack(fill="x", padx=4, pady=(4, 0))
-        self.input_box = scrolledtext.ScrolledText(
-            left_frame, height=8, wrap="none",
-            font=("Consolas", 10)
-        )
-        self.input_box.pack(fill="both", expand=False, padx=4, pady=(2, 8))
+        # -- 输入框 --
+        input_frame = ttk.Frame(left_pane)
+        ttk.Label(input_frame, text="输入（粘贴 JSON）:", anchor="w").pack(fill="x", padx=4, pady=(4, 0))
 
-        ttk.Label(left_frame, text="树状图（可展开/折叠）:", anchor="w").pack(fill="x", padx=4, pady=(0, 0))
+        # 手写带横纵滚动条的文本框
+        input_inner = ttk.Frame(input_frame)
+        input_inner.pack(fill="both", expand=True, padx=4, pady=(2, 0))
+        self.input_box = tk.Text(input_inner, wrap="none", font=("Consolas", 10),
+                                  height=6, undo=True)
+        input_scroll_y = ttk.Scrollbar(input_inner, orient="vertical", command=self.input_box.yview)
+        input_scroll_x = ttk.Scrollbar(input_inner, orient="horizontal", command=self.input_box.xview)
+        self.input_box.configure(yscrollcommand=input_scroll_y.set, xscrollcommand=input_scroll_x.set)
+        self.input_box.grid(row=0, column=0, sticky="nsew")
+        input_scroll_y.grid(row=0, column=1, sticky="ns")
+        input_scroll_x.grid(row=1, column=0, sticky="ew")
+        input_inner.rowconfigure(0, weight=1)
+        input_inner.columnconfigure(0, weight=1)
 
-        tree_frame = ttk.Frame(left_frame)
-        tree_frame.pack(fill="both", expand=True, padx=4, pady=(2, 2))
+        left_pane.add(input_frame, weight=1)
 
-        # Treeview: 两列 — 节点名 | 值
-        self.tree = ttk.Treeview(tree_frame, columns=("value",), show="tree headings",
+        # -- 树状图 --
+        tree_frame = ttk.Frame(left_pane)
+
+        ttk.Label(tree_frame, text="树状图（可展开/折叠）:", anchor="w").pack(fill="x", padx=4, pady=(0, 0))
+
+        tree_inner = ttk.Frame(tree_frame)
+        tree_inner.pack(fill="both", expand=True, padx=4, pady=(2, 0))
+        self.tree = ttk.Treeview(tree_inner, columns=("value",), show="tree headings",
                                   selectmode="browse")
         self.tree.heading("#0", text="节点")
-        self.tree.heading("value", text="值 → 点开节点查看详情")
+        self.tree.heading("value", text="值 → 点击查看完整值")
         self.tree.column("#0", width=260, stretch=True)
         self.tree.column("value", width=320, stretch=True)
 
-        tree_scroll_y = ttk.Scrollbar(tree_frame, orient="vertical", command=self.tree.yview)
-        tree_scroll_x = ttk.Scrollbar(tree_frame, orient="horizontal", command=self.tree.xview)
+        tree_scroll_y = ttk.Scrollbar(tree_inner, orient="vertical", command=self.tree.yview)
+        tree_scroll_x = ttk.Scrollbar(tree_inner, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=tree_scroll_y.set, xscrollcommand=tree_scroll_x.set)
-
         self.tree.grid(row=0, column=0, sticky="nsew")
         tree_scroll_y.grid(row=0, column=1, sticky="ns")
         tree_scroll_x.grid(row=1, column=0, sticky="ew")
-        tree_frame.rowconfigure(0, weight=1)
-        tree_frame.columnconfigure(0, weight=1)
+        tree_inner.rowconfigure(0, weight=1)
+        tree_inner.columnconfigure(0, weight=1)
 
-        # 节点选中 → 显示完整值
         self.tree.bind("<<TreeviewSelect>>", self.on_node_select)
 
-        # 详情面板（选中节点后显示完整值）
-        detail_frame = ttk.LabelFrame(left_frame, text="选中节点完整值（点击树节点查看）", padding=(4, 2))
-        detail_frame.pack(fill="x", padx=4, pady=(4, 2))
+        left_pane.add(tree_frame, weight=3)
+
+        # -- 详情面板 --
+        detail_frame = ttk.LabelFrame(left_pane, text="选中节点完整值（点击树节点查看）", padding=(4, 2))
         self.detail_box = scrolledtext.ScrolledText(
             detail_frame, height=4, wrap="word",
             font=("Consolas", 10), bg="#fffff0"
         )
         self.detail_box.pack(fill="both", expand=True)
+        left_pane.add(detail_frame, weight=1)
 
-        # ---- 右栏: 美化 JSON 输出 ----
+        # ========== 右栏: 美化 JSON 输出 ==========
         right_frame = ttk.Frame(main_pane)
         main_pane.add(right_frame, weight=1)
 
         ttk.Label(right_frame, text="美化 JSON（完整输出）:", anchor="w").pack(fill="x", padx=4, pady=(4, 0))
-        self.output_box = scrolledtext.ScrolledText(
-            right_frame, wrap="none",
-            font=("Consolas", 10), bg="#f5f5f5"
-        )
-        self.output_box.pack(fill="both", expand=True, padx=4, pady=(2, 2))
+
+        output_inner = ttk.Frame(right_frame)
+        output_inner.pack(fill="both", expand=True, padx=4, pady=(2, 2))
+        self.output_box = tk.Text(output_inner, wrap="none", font=("Consolas", 10),
+                                   bg="#f5f5f5", undo=True)
+        output_scroll_y = ttk.Scrollbar(output_inner, orient="vertical", command=self.output_box.yview)
+        output_scroll_x = ttk.Scrollbar(output_inner, orient="horizontal", command=self.output_box.xview)
+        self.output_box.configure(yscrollcommand=output_scroll_y.set, xscrollcommand=output_scroll_x.set)
+        self.output_box.grid(row=0, column=0, sticky="nsew")
+        output_scroll_y.grid(row=0, column=1, sticky="ns")
+        output_scroll_x.grid(row=1, column=0, sticky="ew")
+        output_inner.rowconfigure(0, weight=1)
+        output_inner.columnconfigure(0, weight=1)
 
         # ====== 状态栏 ======
         self.status = ttk.Label(root, text="就绪 — 粘贴 JSON 后点「解析」", relief="sunken", anchor="w")
