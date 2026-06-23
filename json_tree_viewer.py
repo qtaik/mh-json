@@ -76,10 +76,11 @@ def value_summary(val):
 # 构建树 + 递归解析
 # ============================================================
 
-def build_tree(tree_widget, parent_id, key, val, max_depth=10, _depth=0):
+def build_tree(tree_widget, parent_id, key, val, data_store, max_depth=10, _depth=0):
     """
     递归构建 ttk.Treeview 节点
     自动展开 JSON 字符串、JWT、嵌套 dict/list
+    data_store: dict, 存 node_id → 完整值（用于点击查看）
     """
     if _depth >= max_depth:
         return
@@ -89,48 +90,58 @@ def build_tree(tree_widget, parent_id, key, val, max_depth=10, _depth=0):
     if isinstance(val, dict):
         node = tree_widget.insert(parent_id, "end", text=label,
                                    values=(f"{{对象, {len(val)} 个键}}",))
+        data_store[node] = json.dumps(val, indent=2, ensure_ascii=False)
         for k, v in val.items():
-            build_tree(tree_widget, node, k, v, max_depth, _depth + 1)
+            build_tree(tree_widget, node, k, v, data_store, max_depth, _depth + 1)
 
     elif isinstance(val, list):
         node = tree_widget.insert(parent_id, "end", text=label,
                                    values=(f"[列表, {len(val)} 项]",))
+        data_store[node] = json.dumps(val, indent=2, ensure_ascii=False)
         for i, item in enumerate(val):
-            build_tree(tree_widget, node, f"[{i}]", item, max_depth, _depth + 1)
+            build_tree(tree_widget, node, f"[{i}]", item, data_store, max_depth, _depth + 1)
 
     elif is_json_string(val):
         try:
             decoded = json.loads(val)
             node = tree_widget.insert(parent_id, "end", text=label,
                                        values=("[JSON 字符串 → 已展开]",))
-            for k, v in decoded.items() if isinstance(decoded, dict) else enumerate(decoded):
+            data_store[node] = json.dumps(decoded, indent=2, ensure_ascii=False)
+            items = decoded.items() if isinstance(decoded, dict) else enumerate(decoded)
+            for k, v in items:
                 key_label = k if isinstance(decoded, dict) else f"[{k}]"
-                build_tree(tree_widget, node, key_label, v, max_depth, _depth + 1)
+                build_tree(tree_widget, node, key_label, v, data_store, max_depth, _depth + 1)
         except Exception:
-            tree_widget.insert(parent_id, "end", text=label,
+            node = tree_widget.insert(parent_id, "end", text=label,
                                values=("[JSON 解析失败]",))
+            data_store[node] = val
 
     elif is_jwt(val):
         decoded = decode_jwt_payload(val)
         if decoded:
             node = tree_widget.insert(parent_id, "end", text=label,
                                        values=("[JWT → 已解码]",))
+            data_store[node] = json.dumps(decoded, indent=2, ensure_ascii=False)
             for k, v in decoded.items():
-                build_tree(tree_widget, node, k, v, max_depth, _depth + 1)
+                build_tree(tree_widget, node, k, v, data_store, max_depth, _depth + 1)
         else:
-            tree_widget.insert(parent_id, "end", text=label,
+            node = tree_widget.insert(parent_id, "end", text=label,
                                values=(f"[JWT, {len(val)} 字符]",))
+            data_store[node] = val
 
     elif isinstance(val, str):
         s = val.replace("\n", "\\n").replace("\t", "\\t")
-        tree_widget.insert(parent_id, "end", text=label,
+        node = tree_widget.insert(parent_id, "end", text=label,
                            values=(s,))
+        data_store[node] = val
 
     elif val is None:
-        tree_widget.insert(parent_id, "end", text=label, values=("null",))
+        node = tree_widget.insert(parent_id, "end", text=label, values=("null",))
+        data_store[node] = "null"
 
     else:
-        tree_widget.insert(parent_id, "end", text=label, values=(str(val),))
+        node = tree_widget.insert(parent_id, "end", text=label, values=(str(val),))
+        data_store[node] = str(val)
 
 
 # ============================================================
@@ -198,6 +209,18 @@ class JsonTreeViewer:
         tree_frame.rowconfigure(0, weight=1)
         tree_frame.columnconfigure(0, weight=1)
 
+        # 节点选中 → 显示完整值
+        self.tree.bind("<<TreeviewSelect>>", self.on_node_select)
+
+        # 详情面板（选中节点后显示完整值）
+        detail_frame = ttk.LabelFrame(left_frame, text="选中节点完整值（点击树节点查看）", padding=(4, 2))
+        detail_frame.pack(fill="x", padx=4, pady=(4, 2))
+        self.detail_box = scrolledtext.ScrolledText(
+            detail_frame, height=4, wrap="word",
+            font=("Consolas", 10), bg="#fffff0"
+        )
+        self.detail_box.pack(fill="both", expand=True)
+
         # ---- 右栏: 美化 JSON 输出 ----
         right_frame = ttk.Frame(main_pane)
         main_pane.add(right_frame, weight=1)
@@ -233,21 +256,26 @@ class JsonTreeViewer:
         # 清空旧的
         self.tree.delete(*self.tree.get_children())
         self.output_box.delete("1.0", "end")
+        self.detail_box.delete("1.0", "end")
+        self.node_data = {}  # node_id → 完整值
 
         # 构建树
         if isinstance(self.parsed_data, dict):
             root_node = self.tree.insert("", "end", text="(root)",
                                           values=(f"{{对象, {len(self.parsed_data)} 个键}}",))
+            self.node_data[root_node] = json.dumps(self.parsed_data, indent=2, ensure_ascii=False)
             for key, val in self.parsed_data.items():
-                build_tree(self.tree, root_node, key, val)
-            # 自动展开 root
+                build_tree(self.tree, root_node, key, val, self.node_data)
             self.tree.item(root_node, open=True)
         elif isinstance(self.parsed_data, list):
             root_node = self.tree.insert("", "end", text="(root)",
                                           values=(f"[数组, {len(self.parsed_data)} 项]",))
+            self.node_data[root_node] = json.dumps(self.parsed_data, indent=2, ensure_ascii=False)
             for i, item in enumerate(self.parsed_data):
-                build_tree(self.tree, root_node, f"[{i}]", item)
+                build_tree(self.tree, root_node, f"[{i}]", item, self.node_data)
             self.tree.item(root_node, open=True)
+
+        self.status.config(text=f"✅ 解析成功 — 点击左侧节点查看完整值")
 
         # 输出美化 JSON
         formatted = json.dumps(self.parsed_data, indent=2, ensure_ascii=False)
@@ -292,6 +320,18 @@ class JsonTreeViewer:
             self.status.config(text="✅ 已复制美化 JSON 到剪贴板")
         else:
             self.status.config(text="⚠️ 没有内容可复制")
+
+    def on_node_select(self, event):
+        """点击树节点 → 在详情面板显示完整值"""
+        selection = self.tree.selection()
+        if not selection:
+            return
+        item = selection[0]
+        full_value = self.node_data.get(item, "")
+        self.detail_box.delete("1.0", "end")
+        if full_value:
+            node_text = self.tree.item(item, "text")
+            self.detail_box.insert("1.0", f"# {node_text}\n\n{full_value}")
 
     def paste_clipboard(self):
         try:
