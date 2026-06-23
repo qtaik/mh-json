@@ -15,6 +15,88 @@ from tkinter import ttk, scrolledtext
 
 
 # ============================================================
+# 国际化
+# ============================================================
+
+LANG = {
+    "zh": {
+        "title": "JSON 层级可视化",
+        "toolbar_label": "粘贴 JSON →",
+        "btn_parse": "解析",
+        "btn_clear": "清空",
+        "btn_expand": "展开全部",
+        "btn_collapse": "折叠全部",
+        "btn_copy": "复制美化 JSON",
+        "btn_paste": "从剪贴板粘贴",
+        "btn_lang": "EN",
+        "input_label": "输入（粘贴 JSON）:",
+        "tree_label": "树状图（可展开/折叠）:",
+        "tree_col_key": "节点",
+        "tree_col_val": "值 → 点击查看完整值",
+        "detail_label": "选中节点完整值（点击树节点查看）",
+        "output_label": "美化 JSON（完整输出）:",
+        "status_ready": "就绪 — 粘贴 JSON 后点「解析」",
+        "status_empty": "❌ 输入为空",
+        "status_parse_err": "❌ JSON 解析失败: ",
+        "status_success": "✅ 解析成功 — 点击左侧节点查看完整值",
+        "status_copied": "✅ 已复制美化 JSON 到剪贴板",
+        "status_nocopy": "⚠️ 没有内容可复制",
+        "status_pasted": "已粘贴剪贴板内容，点「解析」查看",
+        "status_clip_fail": "❌ 剪贴板为空或不可读",
+        "status_cleared": "已清空",
+        "obj_summary": "对象, {} 个键",
+        "list_summary": "列表, {} 项",
+        "json_expanded": "[JSON 字符串 → 已展开]",
+        "json_fail": "[JSON 解析失败]",
+        "jwt_decoded": "[JWT → 已解码]",
+        "jwt_label": "JWT, {} 字符",
+        "null_val": "null",
+    },
+    "en": {
+        "title": "JSON Tree Viewer",
+        "toolbar_label": "Paste JSON →",
+        "btn_parse": "Parse",
+        "btn_clear": "Clear",
+        "btn_expand": "Expand All",
+        "btn_collapse": "Collapse All",
+        "btn_copy": "Copy Formatted",
+        "btn_paste": "Paste from Clipboard",
+        "btn_lang": "中文",
+        "input_label": "Input (paste JSON):",
+        "tree_label": "Tree (expand/collapse):",
+        "tree_col_key": "Node",
+        "tree_col_val": "Value → Click node for full detail",
+        "detail_label": "Full Value (click tree node to view)",
+        "output_label": "Formatted JSON:",
+        "status_ready": "Ready — paste JSON and click Parse",
+        "status_empty": "❌ Input is empty",
+        "status_parse_err": "❌ JSON parse error: ",
+        "status_success": "✅ Parsed successfully — click a node to view full value",
+        "status_copied": "✅ Formatted JSON copied to clipboard",
+        "status_nocopy": "⚠️ Nothing to copy",
+        "status_pasted": "Pasted from clipboard, click Parse",
+        "status_clip_fail": "❌ Clipboard empty or unreadable",
+        "status_cleared": "Cleared",
+        "obj_summary": "object, {} keys",
+        "list_summary": "array, {} items",
+        "json_expanded": "[JSON string → expanded]",
+        "json_fail": "[JSON parse failed]",
+        "jwt_decoded": "[JWT → decoded]",
+        "jwt_label": "JWT, {} chars",
+        "null_val": "null",
+    },
+}
+
+
+def t(key, lang="zh", **fmt):
+    """取翻译文本, fmt 可选格式化"""
+    s = LANG.get(lang, LANG["zh"]).get(key, key)
+    if fmt:
+        s = s.format(**fmt)
+    return s
+
+
+# ============================================================
 # 核心解析逻辑
 # ============================================================
 
@@ -48,36 +130,11 @@ def decode_jwt_payload(s):
         return None
 
 
-def value_summary(val):
-    """生成值的简短摘要（显示在树节点上）"""
-    if isinstance(val, str) and is_json_string(val):
-        return f"[JSON 字符串, {len(val)} 字符]"
-    elif isinstance(val, str) and is_jwt(val):
-        return f"[JWT, {len(val)} 字符]"
-    elif isinstance(val, str):
-        s = val.replace("\n", " ").replace("\t", " ")
-        if len(s) <= 60:
-            return repr(val)
-        else:
-            return repr(s[:57] + "...")
-    elif isinstance(val, bool):
-        return "true" if val else "false"
-    elif isinstance(val, (int, float)):
-        return str(val)
-    elif isinstance(val, list):
-        return f"[列表, {len(val)} 项]"
-    elif isinstance(val, dict):
-        return f"{{对象, {len(val)} 个键}}"
-    elif val is None:
-        return "null"
-    return str(val)
-
-
 # ============================================================
 # 构建树 + 递归解析
 # ============================================================
 
-def build_tree(tree_widget, parent_id, key, val, data_store, max_depth=10, _depth=0):
+def build_tree(tree_widget, parent_id, key, val, data_store, lang="zh", max_depth=10, _depth=0):
     """
     递归构建 ttk.Treeview 节点
     自动展开 JSON 字符串、JWT、嵌套 dict/list
@@ -90,44 +147,44 @@ def build_tree(tree_widget, parent_id, key, val, data_store, max_depth=10, _dept
 
     if isinstance(val, dict):
         node = tree_widget.insert(parent_id, "end", text=label,
-                                   values=(f"{{对象, {len(val)} 个键}}",))
+                                   values=(t("obj_summary", lang, len=len(val)),))
         data_store[node] = json.dumps(val, indent=2, ensure_ascii=False)
         for k, v in val.items():
-            build_tree(tree_widget, node, k, v, data_store, max_depth, _depth + 1)
+            build_tree(tree_widget, node, k, v, data_store, lang, max_depth, _depth + 1)
 
     elif isinstance(val, list):
         node = tree_widget.insert(parent_id, "end", text=label,
-                                   values=(f"[列表, {len(val)} 项]",))
+                                   values=(t("list_summary", lang, len=len(val)),))
         data_store[node] = json.dumps(val, indent=2, ensure_ascii=False)
         for i, item in enumerate(val):
-            build_tree(tree_widget, node, f"[{i}]", item, data_store, max_depth, _depth + 1)
+            build_tree(tree_widget, node, f"[{i}]", item, data_store, lang, max_depth, _depth + 1)
 
     elif is_json_string(val):
         try:
             decoded = json.loads(val)
             node = tree_widget.insert(parent_id, "end", text=label,
-                                       values=("[JSON 字符串 → 已展开]",))
+                                       values=(t("json_expanded", lang),))
             data_store[node] = json.dumps(decoded, indent=2, ensure_ascii=False)
             items = decoded.items() if isinstance(decoded, dict) else enumerate(decoded)
             for k, v in items:
                 key_label = k if isinstance(decoded, dict) else f"[{k}]"
-                build_tree(tree_widget, node, key_label, v, data_store, max_depth, _depth + 1)
+                build_tree(tree_widget, node, key_label, v, data_store, lang, max_depth, _depth + 1)
         except Exception:
             node = tree_widget.insert(parent_id, "end", text=label,
-                               values=("[JSON 解析失败]",))
+                               values=(t("json_fail", lang),))
             data_store[node] = val
 
     elif is_jwt(val):
         decoded = decode_jwt_payload(val)
         if decoded:
             node = tree_widget.insert(parent_id, "end", text=label,
-                                       values=("[JWT → 已解码]",))
+                                       values=(t("jwt_decoded", lang),))
             data_store[node] = json.dumps(decoded, indent=2, ensure_ascii=False)
             for k, v in decoded.items():
-                build_tree(tree_widget, node, k, v, data_store, max_depth, _depth + 1)
+                build_tree(tree_widget, node, k, v, data_store, lang, max_depth, _depth + 1)
         else:
             node = tree_widget.insert(parent_id, "end", text=label,
-                               values=(f"[JWT, {len(val)} 字符]",))
+                               values=(t("jwt_label", lang, len=len(val)),))
             data_store[node] = val
 
     elif isinstance(val, str):
@@ -137,7 +194,7 @@ def build_tree(tree_widget, parent_id, key, val, data_store, max_depth=10, _dept
         data_store[node] = val
 
     elif val is None:
-        node = tree_widget.insert(parent_id, "end", text=label, values=("null",))
+        node = tree_widget.insert(parent_id, "end", text=label, values=(t("null_val", lang),))
         data_store[node] = "null"
 
     else:
@@ -152,43 +209,50 @@ def build_tree(tree_widget, parent_id, key, val, data_store, max_depth=10, _dept
 class JsonTreeViewer:
     def __init__(self, root):
         self.root = root
-        root.title("JSON 层级可视化")
+        self.lang = "zh"
+        root.title(t("title", self.lang))
         root.geometry("1100x750")
         root.minsize(800, 500)
 
-        # 全局样式
         style = ttk.Style()
         style.theme_use("clam")
 
-        # ====== 顶部工具栏 ======
+        # ====== 工具栏 ======
         toolbar = ttk.Frame(root, padding=(8, 6))
         toolbar.pack(fill="x")
 
-        ttk.Label(toolbar, text="粘贴 JSON → ").pack(side="left")
-        ttk.Button(toolbar, text="解析", command=self.parse_input).pack(side="left", padx=(4, 12))
-        ttk.Button(toolbar, text="清空", command=self.clear_all).pack(side="left")
-        ttk.Button(toolbar, text="展开全部", command=self.expand_all).pack(side="left", padx=(4, 0))
-        ttk.Button(toolbar, text="折叠全部", command=self.collapse_all).pack(side="left", padx=(4, 0))
-        ttk.Button(toolbar, text="复制美化 JSON", command=self.copy_formatted).pack(side="left", padx=(12, 0))
-        ttk.Button(toolbar, text="从剪贴板粘贴", command=self.paste_clipboard).pack(side="left", padx=(4, 0))
+        self.lbl_toolbar = ttk.Label(toolbar, text=t("toolbar_label", self.lang))
+        self.lbl_toolbar.pack(side="left")
+        self.btn_parse = ttk.Button(toolbar, text=t("btn_parse", self.lang), command=self.parse_input)
+        self.btn_parse.pack(side="left", padx=(4, 12))
+        self.btn_clear = ttk.Button(toolbar, text=t("btn_clear", self.lang), command=self.clear_all)
+        self.btn_clear.pack(side="left")
+        self.btn_expand = ttk.Button(toolbar, text=t("btn_expand", self.lang), command=self.expand_all)
+        self.btn_expand.pack(side="left", padx=(4, 0))
+        self.btn_collapse = ttk.Button(toolbar, text=t("btn_collapse", self.lang), command=self.collapse_all)
+        self.btn_collapse.pack(side="left", padx=(4, 0))
+        self.btn_copy = ttk.Button(toolbar, text=t("btn_copy", self.lang), command=self.copy_formatted)
+        self.btn_copy.pack(side="left", padx=(12, 0))
+        self.btn_paste = ttk.Button(toolbar, text=t("btn_paste", self.lang), command=self.paste_clipboard)
+        self.btn_paste.pack(side="left", padx=(4, 0))
+        self.btn_lang = ttk.Button(toolbar, text=t("btn_lang", self.lang), command=self.toggle_language)
+        self.btn_lang.pack(side="right", padx=(4, 0))
 
-        # ====== 主区域: 左右分栏（可拖拽） ======
+        # ====== 主区域 ======
         main_pane = ttk.PanedWindow(root, orient="horizontal")
         main_pane.pack(fill="both", expand=True, padx=8, pady=(0, 8))
 
-        # ========== 左栏: 输入 + 树状图 + 详情（纵向可拖拽） ==========
         left_pane = ttk.PanedWindow(main_pane, orient="vertical")
         main_pane.add(left_pane, weight=1)
 
-        # -- 输入框 --
+        # -- 输入 --
         input_frame = ttk.Frame(left_pane)
-        ttk.Label(input_frame, text="输入（粘贴 JSON）:", anchor="w").pack(fill="x", padx=4, pady=(4, 0))
+        self.lbl_input = ttk.Label(input_frame, text=t("input_label", self.lang), anchor="w")
+        self.lbl_input.pack(fill="x", padx=4, pady=(4, 0))
 
-        # 手写带横纵滚动条的文本框
         input_inner = ttk.Frame(input_frame)
         input_inner.pack(fill="both", expand=True, padx=4, pady=(2, 0))
-        self.input_box = tk.Text(input_inner, wrap="none", font=("Consolas", 10),
-                                  height=6, undo=True)
+        self.input_box = tk.Text(input_inner, wrap="none", font=("Consolas", 10), height=6, undo=True)
         input_scroll_y = ttk.Scrollbar(input_inner, orient="vertical", command=self.input_box.yview)
         input_scroll_x = ttk.Scrollbar(input_inner, orient="horizontal", command=self.input_box.xview)
         self.input_box.configure(yscrollcommand=input_scroll_y.set, xscrollcommand=input_scroll_x.set)
@@ -197,20 +261,18 @@ class JsonTreeViewer:
         input_scroll_x.grid(row=1, column=0, sticky="ew")
         input_inner.rowconfigure(0, weight=1)
         input_inner.columnconfigure(0, weight=1)
-
         left_pane.add(input_frame, weight=1)
 
         # -- 树状图 --
         tree_frame = ttk.Frame(left_pane)
-
-        ttk.Label(tree_frame, text="树状图（可展开/折叠）:", anchor="w").pack(fill="x", padx=4, pady=(0, 0))
+        self.lbl_tree = ttk.Label(tree_frame, text=t("tree_label", self.lang), anchor="w")
+        self.lbl_tree.pack(fill="x", padx=4, pady=(0, 0))
 
         tree_inner = ttk.Frame(tree_frame)
         tree_inner.pack(fill="both", expand=True, padx=4, pady=(2, 0))
-        self.tree = ttk.Treeview(tree_inner, columns=("value",), show="tree headings",
-                                  selectmode="browse")
-        self.tree.heading("#0", text="节点")
-        self.tree.heading("value", text="值 → 点击查看完整值")
+        self.tree = ttk.Treeview(tree_inner, columns=("value",), show="tree headings", selectmode="browse")
+        self.tree.heading("#0", text=t("tree_col_key", self.lang))
+        self.tree.heading("value", text=t("tree_col_val", self.lang))
         self.tree.column("#0", width=260, stretch=True)
         self.tree.column("value", width=320, stretch=True)
 
@@ -222,30 +284,25 @@ class JsonTreeViewer:
         tree_scroll_x.grid(row=1, column=0, sticky="ew")
         tree_inner.rowconfigure(0, weight=1)
         tree_inner.columnconfigure(0, weight=1)
-
         self.tree.bind("<<TreeviewSelect>>", self.on_node_select)
-
         left_pane.add(tree_frame, weight=3)
 
-        # -- 详情面板 --
-        detail_frame = ttk.LabelFrame(left_pane, text="选中节点完整值（点击树节点查看）", padding=(4, 2))
-        self.detail_box = scrolledtext.ScrolledText(
-            detail_frame, height=4, wrap="word",
-            font=("Consolas", 10), bg="#fffff0"
-        )
+        # -- 详情 --
+        self.detail_frame = ttk.LabelFrame(left_pane, text=t("detail_label", self.lang), padding=(4, 2))
+        self.detail_box = scrolledtext.ScrolledText(self.detail_frame, height=4, wrap="word",
+                                                      font=("Consolas", 10), bg="#fffff0")
         self.detail_box.pack(fill="both", expand=True)
-        left_pane.add(detail_frame, weight=1)
+        left_pane.add(self.detail_frame, weight=1)
 
-        # ========== 右栏: 美化 JSON 输出 ==========
+        # ========== 右栏 ==========
         right_frame = ttk.Frame(main_pane)
         main_pane.add(right_frame, weight=1)
-
-        ttk.Label(right_frame, text="美化 JSON（完整输出）:", anchor="w").pack(fill="x", padx=4, pady=(4, 0))
+        self.lbl_output = ttk.Label(right_frame, text=t("output_label", self.lang), anchor="w")
+        self.lbl_output.pack(fill="x", padx=4, pady=(4, 0))
 
         output_inner = ttk.Frame(right_frame)
         output_inner.pack(fill="both", expand=True, padx=4, pady=(2, 2))
-        self.output_box = tk.Text(output_inner, wrap="none", font=("Consolas", 10),
-                                   bg="#f5f5f5", undo=True)
+        self.output_box = tk.Text(output_inner, wrap="none", font=("Consolas", 10), bg="#f5f5f5", undo=True)
         output_scroll_y = ttk.Scrollbar(output_inner, orient="vertical", command=self.output_box.yview)
         output_scroll_x = ttk.Scrollbar(output_inner, orient="horizontal", command=self.output_box.xview)
         self.output_box.configure(yscrollcommand=output_scroll_y.set, xscrollcommand=output_scroll_x.set)
@@ -256,66 +313,101 @@ class JsonTreeViewer:
         output_inner.columnconfigure(0, weight=1)
 
         # ====== 状态栏 ======
-        self.status = ttk.Label(root, text="就绪 — 粘贴 JSON 后点「解析」", relief="sunken", anchor="w")
+        self.status = ttk.Label(root, text=t("status_ready", self.lang), relief="sunken", anchor="w")
         self.status.pack(fill="x", padx=8, pady=(0, 4))
 
         self.parsed_data = None
 
+    # ====== 语言切换 ======
+
+    def toggle_language(self):
+        """中英文切换"""
+        self.lang = "en" if self.lang == "zh" else "zh"
+        lg = self.lang
+        self.root.title(t("title", lg))
+        self.lbl_toolbar.config(text=t("toolbar_label", lg))
+        self.btn_parse.config(text=t("btn_parse", lg))
+        self.btn_clear.config(text=t("btn_clear", lg))
+        self.btn_expand.config(text=t("btn_expand", lg))
+        self.btn_collapse.config(text=t("btn_collapse", lg))
+        self.btn_copy.config(text=t("btn_copy", lg))
+        self.btn_paste.config(text=t("btn_paste", lg))
+        self.btn_lang.config(text=t("btn_lang", lg))
+        self.lbl_input.config(text=t("input_label", lg))
+        self.lbl_tree.config(text=t("tree_label", lg))
+        self.tree.heading("#0", text=t("tree_col_key", lg))
+        self.tree.heading("value", text=t("tree_col_val", lg))
+        self.detail_frame.config(text=t("detail_label", lg))
+        self.lbl_output.config(text=t("output_label", lg))
+        self.status.config(text=t("status_ready", lg))
+        # 如果有已解析的树，重新解析以更新摘要文字
+        if self.parsed_data is not None:
+            self._rebuild_tree()
+
+    def _rebuild_tree(self):
+        """重建树（语言切换后用）"""
+        self.tree.delete(*self.tree.get_children())
+        self.node_data = {}
+        if isinstance(self.parsed_data, dict):
+            root_node = self.tree.insert("", "end", text="(root)",
+                                          values=(t("obj_summary", self.lang, len=len(self.parsed_data)),))
+            self.node_data[root_node] = json.dumps(self.parsed_data, indent=2, ensure_ascii=False)
+            for key, val in self.parsed_data.items():
+                build_tree(self.tree, root_node, key, val, self.node_data, self.lang)
+            self.tree.item(root_node, open=True)
+        elif isinstance(self.parsed_data, list):
+            root_node = self.tree.insert("", "end", text="(root)",
+                                          values=(t("list_summary", self.lang, len=len(self.parsed_data)),))
+            self.node_data[root_node] = json.dumps(self.parsed_data, indent=2, ensure_ascii=False)
+            for i, item in enumerate(self.parsed_data):
+                build_tree(self.tree, root_node, f"[{i}]", item, self.node_data, self.lang)
+            self.tree.item(root_node, open=True)
+
     # ====== 操作 ======
 
     def parse_input(self):
-        """解析输入框中的 JSON"""
         raw = self.input_box.get("1.0", "end-1c").strip()
         if not raw:
-            self.status.config(text="❌ 输入为空")
+            self.status.config(text=t("status_empty", self.lang))
             return
 
         try:
             self.parsed_data = json.loads(raw)
         except json.JSONDecodeError as e:
-            self.status.config(text=f"❌ JSON 解析失败: {e}")
+            self.status.config(text=t("status_parse_err", self.lang) + str(e))
             return
 
-        # 清空旧的
         self.tree.delete(*self.tree.get_children())
         self.output_box.delete("1.0", "end")
         self.detail_box.delete("1.0", "end")
-        self.node_data = {}  # node_id → 完整值
+        self.node_data = {}
 
-        # 构建树
         if isinstance(self.parsed_data, dict):
             root_node = self.tree.insert("", "end", text="(root)",
-                                          values=(f"{{对象, {len(self.parsed_data)} 个键}}",))
+                                          values=(t("obj_summary", self.lang, len=len(self.parsed_data)),))
             self.node_data[root_node] = json.dumps(self.parsed_data, indent=2, ensure_ascii=False)
             for key, val in self.parsed_data.items():
-                build_tree(self.tree, root_node, key, val, self.node_data)
+                build_tree(self.tree, root_node, key, val, self.node_data, self.lang)
             self.tree.item(root_node, open=True)
         elif isinstance(self.parsed_data, list):
             root_node = self.tree.insert("", "end", text="(root)",
-                                          values=(f"[数组, {len(self.parsed_data)} 项]",))
+                                          values=(t("list_summary", self.lang, len=len(self.parsed_data)),))
             self.node_data[root_node] = json.dumps(self.parsed_data, indent=2, ensure_ascii=False)
             for i, item in enumerate(self.parsed_data):
-                build_tree(self.tree, root_node, f"[{i}]", item, self.node_data)
+                build_tree(self.tree, root_node, f"[{i}]", item, self.node_data, self.lang)
             self.tree.item(root_node, open=True)
-
-        self.status.config(text=f"✅ 解析成功 — 点击左侧节点查看完整值")
 
         # 输出美化 JSON
         formatted = json.dumps(self.parsed_data, indent=2, ensure_ascii=False)
         self.output_box.insert("1.0", formatted)
-
-        # 统计
-        self.status.config(
-            text=f"✅ 解析成功 — 根层: {len(self.parsed_data) if isinstance(self.parsed_data, dict) else 'array'} 个键"
-        )
+        self.status.config(text=t("status_success", self.lang))
 
     def clear_all(self):
-        """清空所有内容"""
         self.input_box.delete("1.0", "end")
         self.tree.delete(*self.tree.get_children())
         self.output_box.delete("1.0", "end")
         self.parsed_data = None
-        self.status.config(text="已清空")
+        self.status.config(text=t("status_cleared", self.lang))
 
     def expand_all(self):
         for item in self.tree.get_children():
@@ -340,9 +432,9 @@ class JsonTreeViewer:
         if text:
             self.root.clipboard_clear()
             self.root.clipboard_append(text)
-            self.status.config(text="✅ 已复制美化 JSON 到剪贴板")
+            self.status.config(text=t("status_copied", self.lang))
         else:
-            self.status.config(text="⚠️ 没有内容可复制")
+            self.status.config(text=t("status_nocopy", self.lang))
 
     def on_node_select(self, event):
         """点击树节点 → 在详情面板显示完整值"""
@@ -361,9 +453,9 @@ class JsonTreeViewer:
             text = self.root.clipboard_get()
             self.input_box.delete("1.0", "end")
             self.input_box.insert("1.0", text)
-            self.status.config(text="已粘贴剪贴板内容，点「解析」查看")
+            self.status.config(text=t("status_pasted", self.lang))
         except Exception:
-            self.status.config(text="❌ 剪贴板为空或不可读")
+            self.status.config(text=t("status_clip_fail", self.lang))
 
 
 # ============================================================
