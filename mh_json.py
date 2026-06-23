@@ -454,7 +454,9 @@ class JsonTreeViewer:
 
     def active_tab(self):
         idx = self.notebook.index("current")
-        return self.tabs[idx] if self.tabs else None
+        if 0 <= idx < len(self.tabs):
+            return self.tabs[idx]
+        return None  # diff 标签页等非 JsonTab
 
     def add_tab(self):
         self.tab_counter += 1
@@ -544,17 +546,30 @@ class JsonTreeViewer:
         panes.add(left_frame, weight=1)
         panes.add(right_frame, weight=1)
 
-        ttk.Label(left_frame, text=name1, anchor="center", font=("Consolas", 10, "bold")).pack(fill="x")
-        ttk.Label(right_frame, text=name2, anchor="center", font=("Consolas", 10, "bold")).pack(fill="x")
+        # 全部用 grid 避免 pack/grid 混用
+        left_frame.rowconfigure(1, weight=1); left_frame.columnconfigure(0, weight=1)
+        right_frame.rowconfigure(1, weight=1); right_frame.columnconfigure(0, weight=1)
+
+        ttk.Label(left_frame, text=name1, anchor="center", font=("Consolas", 10, "bold")).grid(row=0, column=0, sticky="ew")
+        ttk.Label(right_frame, text=name2, anchor="center", font=("Consolas", 10, "bold")).grid(row=0, column=0, sticky="ew")
 
         left_box = tk.Text(left_frame, wrap="none", font=("Consolas", 10))
         right_box = tk.Text(right_frame, wrap="none", font=("Consolas", 10))
+        left_box.grid(row=1, column=0, sticky="nsew")
+        right_box.grid(row=1, column=0, sticky="nsew")
 
         # 滚动条
         left_sy = ttk.Scrollbar(left_frame, orient="vertical", command=left_box.yview)
+        left_sy.grid(row=1, column=1, sticky="ns")
         left_sx = ttk.Scrollbar(left_frame, orient="horizontal", command=left_box.xview)
+        left_sx.grid(row=2, column=0, sticky="ew")
         left_box.configure(yscrollcommand=left_sy.set, xscrollcommand=left_sx.set)
-        right_box.configure(yscrollcommand=left_sy.set, xscrollcommand=left_sx.set)
+
+        right_sy = ttk.Scrollbar(right_frame, orient="vertical", command=right_box.yview)
+        right_sy.grid(row=1, column=1, sticky="ns")
+        right_sx = ttk.Scrollbar(right_frame, orient="horizontal", command=right_box.xview)
+        right_sx.grid(row=2, column=0, sticky="ew")
+        right_box.configure(yscrollcommand=right_sy.set, xscrollcommand=right_sx.set)
 
         # 高亮标签
         left_box.tag_configure("del", background="#ffcdd2")
@@ -594,19 +609,6 @@ class JsonTreeViewer:
         left_box.config(state="disabled")
         right_box.config(state="disabled")
 
-        left_box.grid(row=1, column=0, sticky="nsew")
-        left_sy.grid(row=1, column=1, sticky="ns")
-        left_sx.grid(row=2, column=0, sticky="ew")
-        right_box.grid(row=1, column=0, sticky="nsew")
-        right_sy = ttk.Scrollbar(right_frame, orient="vertical", command=right_box.yview)
-        right_sy.grid(row=1, column=1, sticky="ns")
-        right_sx = ttk.Scrollbar(right_frame, orient="horizontal", command=right_box.xview)
-        right_sx.grid(row=2, column=0, sticky="ew")
-        right_box.configure(yscrollcommand=right_sy.set, xscrollcommand=right_sx.set)
-
-        left_frame.rowconfigure(1, weight=1); left_frame.columnconfigure(0, weight=1)
-        right_frame.rowconfigure(1, weight=1); right_frame.columnconfigure(0, weight=1)
-
         # 同步滚动逻辑
         def sync_scroll(*args):
             if sync_var.get():
@@ -621,11 +623,14 @@ class JsonTreeViewer:
         self.status.config(text=f"{name1} ↔ {name2}")
 
     def close_active_tab(self):
-        """× 按钮：关闭当前标签"""
-        if len(self.tabs) <= 1:
+        """× 按钮：关闭当前标签（含 diff 标签）"""
+        total = self.notebook.index("end")
+        if total <= 1:
             return
         idx = self.notebook.index("current")
-        self.tabs.pop(idx)
+        # diff 标签不在 tabs 里，直接 forget
+        if idx < len(self.tabs):
+            self.tabs.pop(idx)
         self.notebook.forget(idx)
 
     # ====== 工具栏操作 → 转发到激活标签 ======
