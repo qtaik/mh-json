@@ -57,6 +57,8 @@ LANG = {
         "diff_same": "✅ 两个 JSON 完全一致",
         "diff_header": "--- 标签1\n+++ 标签2\n",
         "diff_need2": "⚠️ 需要至少 2 个标签页才能对比",
+        "diff_sync": "同步滚动",
+        "diff_sync_title": "左右同步滚动",
     },
     "en": {
         "title": "JSON Tree Viewer",
@@ -95,6 +97,8 @@ LANG = {
         "diff_same": "✅ Two JSONs are identical",
         "diff_header": "--- Tab1\n+++ Tab2\n",
         "diff_need2": "⚠️ Need at least 2 tabs to compare",
+        "diff_sync": "Sync Scroll",
+        "diff_sync_title": "Sync left and right scrolling",
     },
 }
 
@@ -462,56 +466,152 @@ class JsonTreeViewer:
         self.notebook.select(frame)
 
     def compare_tabs(self):
-        """对比前两个标签页的格式化 JSON"""
+        """弹出选择框：选左右两个标签页做左右对比"""
         if len(self.tabs) < 2:
             self.status.config(text=t("diff_need2", self.lang))
             return
-        raw1 = self.tabs[0].get_formatted_text()
-        raw2 = self.tabs[1].get_formatted_text()
-        if not raw1 or not raw2:
-            self.status.config(text=t("diff_need2", self.lang))
+
+        names = [self.notebook.tab(i, "text") for i in range(len(self.tabs))]
+        cur = self.notebook.index("current")
+
+        # 弹窗
+        dlg = tk.Toplevel(self.root)
+        dlg.title(t("btn_diff", self.lang))
+        dlg.geometry("320x180")
+        dlg.resizable(False, False)
+        dlg.transient(self.root)
+        dlg.grab_set()
+
+        ttk.Label(dlg, text="左边:").grid(row=0, column=0, padx=8, pady=(12, 2), sticky="w")
+        left_cb = ttk.Combobox(dlg, values=names, state="readonly", width=28)
+        left_cb.grid(row=1, column=0, padx=8, pady=(0, 4))
+        left_cb.current(max(cur - 1, 0))
+
+        ttk.Label(dlg, text="右边:").grid(row=2, column=0, padx=8, pady=(4, 2), sticky="w")
+        right_cb = ttk.Combobox(dlg, values=names, state="readonly", width=28)
+        right_cb.grid(row=3, column=0, padx=8, pady=(0, 8))
+        right_cb.current(min(cur + 1, len(names) - 1))
+
+        def do_compare():
+            li = left_cb.current()
+            ri = right_cb.current()
+            dlg.destroy()
+            if li < 0 or ri < 0 or li == ri:
+                return
+            self._show_diff(li, ri)
+
+        ttk.Button(dlg, text="对比", command=do_compare).grid(row=4, column=0, pady=(0, 10))
+
+    def _show_diff(self, idx1, idx2):
+        """打开侧边对比标签页"""
+        raw1 = self.tabs[idx1].get_formatted_text()
+        raw2 = self.tabs[idx2].get_formatted_text()
+        if not raw1 and not raw2:
             return
+        name1 = self.notebook.tab(idx1, "text")
+        name2 = self.notebook.tab(idx2, "text")
 
-        diff_lines = list(difflib.unified_diff(
-            raw1.splitlines(keepends=True),
-            raw2.splitlines(keepends=True),
-            fromfile="Tab 1", tofile="Tab 2"
-        ))
-        if not diff_lines:
-            diff_text = t("diff_same", self.lang)
-        else:
-            diff_text = "".join(diff_lines)
+        lines1 = raw1.splitlines(keepends=True)
+        lines2 = raw2.splitlines(keepends=True)
 
-        # 新建标签页展示 diff（纯文本，不用树状图）
+        # difflib 逐行匹配
+        matcher = difflib.SequenceMatcher(None, lines1, lines2)
+        opcodes = matcher.get_opcodes()
+
         self.tab_counter += 1
         frame = ttk.Frame(self.notebook)
-        self.notebook.add(frame, text=t("diff_title", self.lang))
+        self.notebook.add(frame, text=f"{name1} ↔ {name2}")
         self.notebook.select(frame)
 
-        diff_box = tk.Text(frame, wrap="none", font=("Consolas", 10), bg="#1e1e1e", fg="#d4d4d4",
-                            insertbackground="white")
-        diff_box.pack(fill="both", expand=True)
+        # 同步滚动开关
+        sync_var = tk.BooleanVar(value=True)
+        sync_cb = ttk.Checkbutton(frame, text=t("diff_sync", self.lang), variable=sync_var)
+        sync_cb.pack(anchor="w", padx=4, pady=(2, 0))
 
-        # 语法高亮 diff
-        diff_box.tag_configure("add", foreground="#4ec9b0")
-        diff_box.tag_configure("del", foreground="#f44747")
-        diff_box.tag_configure("info", foreground="#569cd6")
-        diff_box.tag_configure("header", foreground="#c586c0")
+        # 左右文字框
+        panes = ttk.PanedWindow(frame, orient="horizontal")
+        panes.pack(fill="both", expand=True, padx=4, pady=(0, 4))
 
-        for line in diff_text.splitlines(True):
-            if line.startswith("+"):
-                diff_box.insert("end", line, "add")
-            elif line.startswith("-"):
-                diff_box.insert("end", line, "del")
-            elif line.startswith("@@"):
-                diff_box.insert("end", line, "info")
-            elif line.startswith("---") or line.startswith("+++"):
-                diff_box.insert("end", line, "header")
-            else:
-                diff_box.insert("end", line)
+        left_frame = ttk.Frame(panes)
+        right_frame = ttk.Frame(panes)
+        panes.add(left_frame, weight=1)
+        panes.add(right_frame, weight=1)
 
-        diff_box.config(state="disabled")
-        self.status.config(text=t("diff_title", self.lang))
+        ttk.Label(left_frame, text=name1, anchor="center", font=("Consolas", 10, "bold")).pack(fill="x")
+        ttk.Label(right_frame, text=name2, anchor="center", font=("Consolas", 10, "bold")).pack(fill="x")
+
+        left_box = tk.Text(left_frame, wrap="none", font=("Consolas", 10))
+        right_box = tk.Text(right_frame, wrap="none", font=("Consolas", 10))
+
+        # 滚动条
+        left_sy = ttk.Scrollbar(left_frame, orient="vertical", command=left_box.yview)
+        left_sx = ttk.Scrollbar(left_frame, orient="horizontal", command=left_box.xview)
+        left_box.configure(yscrollcommand=left_sy.set, xscrollcommand=left_sx.set)
+        right_box.configure(yscrollcommand=left_sy.set, xscrollcommand=left_sx.set)
+
+        # 高亮标签
+        left_box.tag_configure("del", background="#ffcdd2")
+        left_box.tag_configure("emp", background="#e0e0e0")
+        right_box.tag_configure("add", background="#c8e6c9")
+        right_box.tag_configure("emp", background="#e0e0e0")
+
+        for tag, i1, i2, j1, j2 in opcodes:
+            if tag == "equal":
+                for l in lines1[i1:i2]:
+                    left_box.insert("end", l)
+                for l in lines2[j1:j2]:
+                    right_box.insert("end", l)
+            elif tag == "delete":
+                for l in lines1[i1:i2]:
+                    left_box.insert("end", l, "del")
+                for _ in range(j2 - j1):
+                    right_box.insert("end", "\n", "emp")
+            elif tag == "insert":
+                for _ in range(i2 - i1):
+                    left_box.insert("end", "\n", "emp")
+                for l in lines2[j1:j2]:
+                    right_box.insert("end", l, "add")
+            elif tag == "replace":
+                for l in lines1[i1:i2]:
+                    left_box.insert("end", l, "del")
+                for l in lines2[j1:j2]:
+                    right_box.insert("end", l, "add")
+                # 补空行使两边行数对齐
+                if (i2 - i1) < (j2 - j1):
+                    for _ in range((j2 - j1) - (i2 - i1)):
+                        left_box.insert("end", "\n", "emp")
+                elif (j2 - j1) < (i2 - i1):
+                    for _ in range((i2 - i1) - (j2 - j1)):
+                        right_box.insert("end", "\n", "emp")
+
+        left_box.config(state="disabled")
+        right_box.config(state="disabled")
+
+        left_box.grid(row=1, column=0, sticky="nsew")
+        left_sy.grid(row=1, column=1, sticky="ns")
+        left_sx.grid(row=2, column=0, sticky="ew")
+        right_box.grid(row=1, column=0, sticky="nsew")
+        right_sy = ttk.Scrollbar(right_frame, orient="vertical", command=right_box.yview)
+        right_sy.grid(row=1, column=1, sticky="ns")
+        right_sx = ttk.Scrollbar(right_frame, orient="horizontal", command=right_box.xview)
+        right_sx.grid(row=2, column=0, sticky="ew")
+        right_box.configure(yscrollcommand=right_sy.set, xscrollcommand=right_sx.set)
+
+        left_frame.rowconfigure(1, weight=1); left_frame.columnconfigure(0, weight=1)
+        right_frame.rowconfigure(1, weight=1); right_frame.columnconfigure(0, weight=1)
+
+        # 同步滚动逻辑
+        def sync_scroll(*args):
+            if sync_var.get():
+                left_box.yview_moveto(args[0])
+        right_box.configure(yscrollcommand=lambda *a: (right_sy.set(*a), sync_scroll(*a) if sync_var.get() else None))
+        # 重绑 left 的 yscrollcommand
+        left_box.configure(yscrollcommand=lambda *a: (
+            left_sy.set(*a),
+            right_box.yview_moveto(a[0]) if sync_var.get() else None
+        ))
+
+        self.status.config(text=f"{name1} ↔ {name2}")
 
     def close_active_tab(self):
         """× 按钮：关闭当前标签"""
