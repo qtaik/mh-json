@@ -123,9 +123,8 @@ def build_tree(tree_widget, parent_id, key, val, max_depth=10, _depth=0):
 
     elif isinstance(val, str):
         s = val.replace("\n", "\\n").replace("\t", "\\t")
-        display = s if len(s) <= 80 else s[:77] + "..."
         tree_widget.insert(parent_id, "end", text=label,
-                           values=(f'"{display}"',))
+                           values=(s,))
 
     elif val is None:
         tree_widget.insert(parent_id, "end", text=label, values=("null",))
