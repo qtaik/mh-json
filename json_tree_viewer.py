@@ -1,11 +1,12 @@
 """
-JSON 层级可视化工具 — APP 渗透专用 GUI 版
+JSON 层级可视化工具
 用法: python json_tree_viewer.py
 功能:
-  - 粘贴 Burp 抓到的请求体 → 自动解析嵌套 JSON + JWT
-  - 左侧: 树状图（可折叠/展开，一眼看清层级）
+  - 粘贴嵌套 JSON → 自动逐层展开 + 解码 JWT
+  - 左侧: 可折叠树状图，一眼看清层级
   - 右侧: 完整美化 JSON 输出
-  - 零依赖，Python 自带 tkinter
+  - 底部: 点击节点查看完整值
+  - 零依赖，Python 3 自带 tkinter
 """
 import json
 import base64
@@ -151,7 +152,7 @@ def build_tree(tree_widget, parent_id, key, val, data_store, max_depth=10, _dept
 class JsonTreeViewer:
     def __init__(self, root):
         self.root = root
-        root.title("JSON 层级可视化 — APP 渗透专用")
+        root.title("JSON 层级可视化")
         root.geometry("1100x750")
         root.minsize(800, 500)
 
@@ -163,7 +164,7 @@ class JsonTreeViewer:
         toolbar = ttk.Frame(root, padding=(8, 6))
         toolbar.pack(fill="x")
 
-        ttk.Label(toolbar, text="粘贴 Burp 请求体 JSON → ").pack(side="left")
+        ttk.Label(toolbar, text="粘贴 JSON → ").pack(side="left")
         ttk.Button(toolbar, text="解析", command=self.parse_input).pack(side="left", padx=(4, 12))
         ttk.Button(toolbar, text="清空", command=self.clear_all).pack(side="left")
         ttk.Button(toolbar, text="展开全部", command=self.expand_all).pack(side="left", padx=(4, 0))
