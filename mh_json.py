@@ -417,10 +417,12 @@ class JsonTreeViewer:
         # ====== 标签页 ======
         tab_bar = ttk.Frame(root)
         tab_bar.pack(fill="x", padx=8)
-        self.notebook = ttk.Notebook(tab_bar)
-        self.notebook.pack(fill="x", side="left")
+        self.btn_del_tab = ttk.Button(tab_bar, text="×", width=3, command=self.close_active_tab)
+        self.btn_del_tab.pack(side="right", padx=(0, 0))
         self.btn_new_tab = ttk.Button(tab_bar, text="+", width=3, command=self.add_tab)
-        self.btn_new_tab.pack(side="left", padx=(2, 0))
+        self.btn_new_tab.pack(side="right", padx=(2, 2))
+        self.notebook = ttk.Notebook(tab_bar)
+        self.notebook.pack(fill="x", side="right", expand=True)
 
         # ====== 内容区（动态替换） ======
         self.content_frame = ttk.Frame(root)
@@ -446,29 +448,33 @@ class JsonTreeViewer:
         self.tabs.append(tab)
         self.notebook.add(frame, text=name)
         self.notebook.select(frame)
+        # 右键菜单 & 双击改名
+        idx = len(self.tabs) - 1
+        self._bind_tab_menu(frame, idx)
 
-        # 关闭按钮（右键菜单）
-        self._bind_tab_close(frame, len(self.tabs) - 1)
-
-    def _bind_tab_close(self, frame, idx):
+    def _bind_tab_menu(self, frame, idx):
         menu = tk.Menu(self.root, tearoff=0)
-        menu.add_command(label="关闭标签", command=lambda: self.close_tab(idx))
+        menu.add_command(label="关闭标签", command=lambda: self._del_tab(idx))
         menu.add_command(label="重命名", command=lambda: self._rename_tab(idx))
         def popup(e):
             menu.tk_popup(e.x_root, e.y_root)
         frame.bind("<Button-3>", popup)
-        # 双击标签改名
         frame.bind("<Double-Button-1>", lambda e: self._rename_tab(idx))
 
-    def close_tab(self, idx):
+    def close_active_tab(self):
+        """× 按钮：关闭当前标签"""
+        idx = self.notebook.index("current")
+        self._del_tab(idx)
+
+    def _del_tab(self, idx):
         if len(self.tabs) <= 1:
             return
-        tab = self.tabs.pop(idx)
+        self.tabs.pop(idx)
         self.notebook.forget(idx)
-        # 重新绑定索引
+        # 重绑索引
         for i in range(len(self.tabs)):
             frame = self.notebook.winfo_children()[i]
-            self._bind_tab_close(frame, i)
+            self._bind_tab_menu(frame, i)
 
     def _rename_tab(self, idx):
         import tkinter.simpledialog as sd
