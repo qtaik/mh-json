@@ -414,19 +414,18 @@ class JsonTreeViewer:
         self.btn_lang = ttk.Button(toolbar, text=t("btn_lang", self.lang), command=self.toggle_language)
         self.btn_lang.pack(side="right", padx=(4, 0))
 
-        # ====== 标签页 ======
+        # ====== 标签栏（仅按钮） ======
         tab_bar = ttk.Frame(root)
-        tab_bar.pack(fill="x", padx=8)
-        self.btn_del_tab = ttk.Button(tab_bar, text="×", width=3, command=self.close_active_tab)
-        self.btn_del_tab.pack(side="right", padx=(0, 0))
+        tab_bar.pack(fill="x", padx=8, pady=(2, 0))
+        ttk.Label(tab_bar, text="标签页:").pack(side="left")
         self.btn_new_tab = ttk.Button(tab_bar, text="+", width=3, command=self.add_tab)
-        self.btn_new_tab.pack(side="right", padx=(2, 2))
-        self.notebook = ttk.Notebook(tab_bar)
-        self.notebook.pack(fill="x", side="right", expand=True)
+        self.btn_new_tab.pack(side="left", padx=(4, 2))
+        self.btn_del_tab = ttk.Button(tab_bar, text="×", width=3, command=self.close_active_tab)
+        self.btn_del_tab.pack(side="left")
 
-        # ====== 内容区（动态替换） ======
-        self.content_frame = ttk.Frame(root)
-        self.content_frame.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+        # ====== 标签内容区 ======
+        self.notebook = ttk.Notebook(root)
+        self.notebook.pack(fill="both", expand=True, padx=8, pady=(0, 8))
 
         # ====== 状态栏 ======
         self.status = ttk.Label(root, text=t("status_ready", self.lang), relief="sunken", anchor="w")
@@ -448,39 +447,14 @@ class JsonTreeViewer:
         self.tabs.append(tab)
         self.notebook.add(frame, text=name)
         self.notebook.select(frame)
-        # 右键菜单 & 双击改名
-        idx = len(self.tabs) - 1
-        self._bind_tab_menu(frame, idx)
-
-    def _bind_tab_menu(self, frame, idx):
-        menu = tk.Menu(self.root, tearoff=0)
-        menu.add_command(label="关闭标签", command=lambda: self._del_tab(idx))
-        menu.add_command(label="重命名", command=lambda: self._rename_tab(idx))
-        def popup(e):
-            menu.tk_popup(e.x_root, e.y_root)
-        frame.bind("<Button-3>", popup)
-        frame.bind("<Double-Button-1>", lambda e: self._rename_tab(idx))
 
     def close_active_tab(self):
         """× 按钮：关闭当前标签"""
-        idx = self.notebook.index("current")
-        self._del_tab(idx)
-
-    def _del_tab(self, idx):
         if len(self.tabs) <= 1:
             return
+        idx = self.notebook.index("current")
         self.tabs.pop(idx)
         self.notebook.forget(idx)
-        # 重绑索引
-        for i in range(len(self.tabs)):
-            frame = self.notebook.winfo_children()[i]
-            self._bind_tab_menu(frame, i)
-
-    def _rename_tab(self, idx):
-        import tkinter.simpledialog as sd
-        new_name = sd.askstring("重命名", "标签名:", parent=self.root)
-        if new_name:
-            self.notebook.tab(idx, text=new_name)
 
     # ====== 工具栏操作 → 转发到激活标签 ======
 
