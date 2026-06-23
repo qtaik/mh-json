@@ -10,6 +10,7 @@ JSON 层级可视化工具
 """
 import json
 import base64
+import difflib
 import tkinter as tk
 from tkinter import ttk, scrolledtext
 
@@ -51,6 +52,11 @@ LANG = {
         "jwt_decoded": "[JWT → 已解码]",
         "jwt_label": "JWT, {len} 字符",
         "null_val": "null",
+        "btn_diff": "对比 JSON",
+        "diff_title": "对比结果",
+        "diff_same": "✅ 两个 JSON 完全一致",
+        "diff_header": "--- 标签1\n+++ 标签2\n",
+        "diff_need2": "⚠️ 需要至少 2 个标签页才能对比",
     },
     "en": {
         "title": "JSON Tree Viewer",
@@ -84,6 +90,11 @@ LANG = {
         "jwt_decoded": "[JWT → decoded]",
         "jwt_label": "JWT, {len} chars",
         "null_val": "null",
+        "btn_diff": "Diff JSON",
+        "diff_title": "Diff Result",
+        "diff_same": "✅ Two JSONs are identical",
+        "diff_header": "--- Tab1\n+++ Tab2\n",
+        "diff_need2": "⚠️ Need at least 2 tabs to compare",
     },
 }
 
@@ -411,6 +422,8 @@ class JsonTreeViewer:
         self.btn_copy.pack(side="left", padx=(12, 0))
         self.btn_paste = ttk.Button(toolbar, text=t("btn_paste", self.lang), command=self.paste_active)
         self.btn_paste.pack(side="left", padx=(4, 0))
+        self.btn_diff = ttk.Button(toolbar, text=t("btn_diff", self.lang), command=self.compare_tabs)
+        self.btn_diff.pack(side="left", padx=(12, 0))
         self.btn_lang = ttk.Button(toolbar, text=t("btn_lang", self.lang), command=self.toggle_language)
         self.btn_lang.pack(side="right", padx=(4, 0))
 
@@ -447,6 +460,58 @@ class JsonTreeViewer:
         self.tabs.append(tab)
         self.notebook.add(frame, text=name)
         self.notebook.select(frame)
+
+    def compare_tabs(self):
+        """对比前两个标签页的格式化 JSON"""
+        if len(self.tabs) < 2:
+            self.status.config(text=t("diff_need2", self.lang))
+            return
+        raw1 = self.tabs[0].get_formatted_text()
+        raw2 = self.tabs[1].get_formatted_text()
+        if not raw1 or not raw2:
+            self.status.config(text=t("diff_need2", self.lang))
+            return
+
+        diff_lines = list(difflib.unified_diff(
+            raw1.splitlines(keepends=True),
+            raw2.splitlines(keepends=True),
+            fromfile="Tab 1", tofile="Tab 2"
+        ))
+        if not diff_lines:
+            diff_text = t("diff_same", self.lang)
+        else:
+            diff_text = "".join(diff_lines)
+
+        # 新建标签页展示 diff（纯文本，不用树状图）
+        self.tab_counter += 1
+        frame = ttk.Frame(self.notebook)
+        self.notebook.add(frame, text=t("diff_title", self.lang))
+        self.notebook.select(frame)
+
+        diff_box = tk.Text(frame, wrap="none", font=("Consolas", 10), bg="#1e1e1e", fg="#d4d4d4",
+                            insertbackground="white")
+        diff_box.pack(fill="both", expand=True)
+
+        # 语法高亮 diff
+        diff_box.tag_configure("add", foreground="#4ec9b0")
+        diff_box.tag_configure("del", foreground="#f44747")
+        diff_box.tag_configure("info", foreground="#569cd6")
+        diff_box.tag_configure("header", foreground="#c586c0")
+
+        for line in diff_text.splitlines(True):
+            if line.startswith("+"):
+                diff_box.insert("end", line, "add")
+            elif line.startswith("-"):
+                diff_box.insert("end", line, "del")
+            elif line.startswith("@@"):
+                diff_box.insert("end", line, "info")
+            elif line.startswith("---") or line.startswith("+++"):
+                diff_box.insert("end", line, "header")
+            else:
+                diff_box.insert("end", line)
+
+        diff_box.config(state="disabled")
+        self.status.config(text=t("diff_title", self.lang))
 
     def close_active_tab(self):
         """× 按钮：关闭当前标签"""
@@ -516,6 +581,7 @@ class JsonTreeViewer:
         self.btn_collapse.config(text=t("btn_collapse", lg))
         self.btn_copy.config(text=t("btn_copy", lg))
         self.btn_paste.config(text=t("btn_paste", lg))
+        self.btn_diff.config(text=t("btn_diff", lg))
         self.btn_lang.config(text=t("btn_lang", lg))
         self.status.config(text=t("status_ready", lg))
         for tab in self.tabs:
