@@ -57,6 +57,7 @@ LANG = {
         "diff_same": "✅ 两个 JSON 完全一致",
         "diff_header": "--- 标签1\n+++ 标签2\n",
         "diff_need2": "⚠️ 需要至少 2 个标签页才能对比",
+        "diff_no_parse": "⚠️ 请先点击「解析」——标签页「{name}」的数据还没解析",
         "diff_sync": "同步滚动",
         "diff_sync_title": "左右同步滚动",
     },
@@ -97,6 +98,7 @@ LANG = {
         "diff_same": "✅ Two JSONs are identical",
         "diff_header": "--- Tab1\n+++ Tab2\n",
         "diff_need2": "⚠️ Need at least 2 tabs to compare",
+        "diff_no_parse": "⚠️ Please click Parse first — tab \"{name}\" has no parsed data",
         "diff_sync": "Sync Scroll",
         "diff_sync_title": "Sync left and right scrolling",
     },
@@ -143,6 +145,59 @@ def decode_jwt_payload(s):
         return json.loads(decoded)
     except Exception:
         return None
+
+
+# ============================================================
+# 递归美化 JSON（字符串里的 JSON 也展开）
+# ============================================================
+
+def deep_format(data, indent=2, ensure_ascii=False):
+    """和 json.dumps 一样，但递归展开字符串中嵌套的 JSON"""
+    if isinstance(data, dict):
+        items = []
+        for k, v in data.items():
+            formatted_v = deep_format(v, indent, ensure_ascii)
+            items.append(f'{" " * indent}"{k}": {formatted_v}')
+        return "{\n" + ",\n".join(items) + "\n}"
+    elif isinstance(data, list):
+        if not data:
+            return "[]"
+        items = [f'{" " * indent}{deep_format(item, indent, ensure_ascii)}' for item in data]
+        return "[\n" + ",\n".join(items) + "\n]"
+    elif isinstance(data, str):
+        # 尝试解析为 JSON，成功则递归展开
+        if is_json_string(data):
+            try:
+                inner = json.loads(data)
+                formatted_inner = deep_format(inner, indent, ensure_ascii)
+                # 返回缩进后的 JSON（不带外层引号，因为是嵌入值）
+                return json.dumps(formatted_inner, ensure_ascii=False)
+            except Exception:
+                pass
+        return json.dumps(data, ensure_ascii=ensure_ascii)
+    elif isinstance(data, bool):
+        return "true" if data else "false"
+    elif isinstance(data, (int, float)):
+        return json.dumps(data)
+    elif data is None:
+        return "null"
+    return json.dumps(data, ensure_ascii=ensure_ascii)
+
+
+def smart_format(data):
+    """美化 JSON：递归展开所有嵌套的 JSON 字符串"""
+    if isinstance(data, dict):
+        result = {}
+        for k, v in data.items():
+            if isinstance(v, str) and is_json_string(v):
+                try:
+                    result[k] = json.loads(v)
+                except Exception:
+                    result[k] = v
+            else:
+                result[k] = v
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    return json.dumps(data, indent=2, ensure_ascii=False)
 
 
 # ============================================================
@@ -333,7 +388,7 @@ class JsonTab:
                 build_tree(self.tree, root_node, f"[{i}]", item, self.node_data, self.lang)
             self.tree.item(root_node, open=True)
 
-        formatted = json.dumps(self.parsed_data, indent=2, ensure_ascii=False)
+        formatted = smart_format(self.parsed_data)
         self.output_box.insert("1.0", formatted)
         return True, t("status_success", self.lang)
 
@@ -500,6 +555,12 @@ class JsonTreeViewer:
             dlg.destroy()
             if li < 0 or ri < 0 or li == ri:
                 return
+            # 检查是否已解析
+            for i, idx in enumerate([li, ri]):
+                if self.tabs[idx].parsed_data is None:
+                    name = self.notebook.tab(idx, "text")
+                    self.status.config(text=t("diff_no_parse", self.lang, name=name))
+                    return
             self._show_diff(li, ri)
 
         ttk.Button(dlg, text="对比", command=do_compare).grid(row=4, column=0, pady=(0, 10))
@@ -511,7 +572,7 @@ class JsonTreeViewer:
         # 从 parsed_data 生成格式化 JSON（确保有内容，不依赖 output_box）
         def _get_formatted(tab):
             if tab.parsed_data is not None:
-                return json.dumps(tab.parsed_data, indent=2, ensure_ascii=False)
+                return smart_format(tab.parsed_data)
             return tab.get_formatted_text()
         raw1 = _get_formatted(tab1)
         raw2 = _get_formatted(tab2)
