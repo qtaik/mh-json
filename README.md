@@ -36,6 +36,8 @@ python mh_json.py
 
 ![1](./1.png)
 
+![2](./2.png)
+
 ## 依赖
 
 **零依赖** — Python 3 自带 tkinter，无需 pip install 任何东西。
